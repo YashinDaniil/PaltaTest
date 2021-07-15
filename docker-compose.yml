@@ -1,0 +1,86 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=dockerpalta-app
+      - POSTGRES_DB=PaltaTest
+    expose:
+      - 5433
+    ports:
+      - "5433:5432"
+  backend:
+    build: ./PaltaTest
+    command: ["python3", "server.py"] 
+    environment:
+      PYTHONUNBUFFERED: 1
+      SECRET_KEY: django-insecure-zwuc6tujuxl0+1!0q+\=tq*&ct&^asywql3)^u\=l^qkiuy3x*%*;
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_WORKER_TIMEOUT: 300.0
+      DB_NAME: PaltaTest
+      DB_USER: postgres
+      DB_PASSWORD: dockerpalta-app
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DADATA_SECRET: 
+      DADATA_TOKEN: 
+      YANDEX_API_TOKEN: 
+    volumes:
+      - ./PaltaTest:/app/backend
+    ports:
+      - "8080:8000"
+    depends_on:
+      - postgres
+  frontend:
+    build: ./paltatest_frontend
+    command: ["npm", "start"]
+    volumes:    
+      - ./paltatest_frontend:/app/frontend
+      - ./paltatest_frontend/node_modules:/app/frontend/node_modules
+    ports:
+      - "3001:3000"
+    environment: 
+      REACT_APP_API_URL_HOST: http://127.0.0.1:8080
+      REACT_APP_WS_URL_HOST: ws://127.0.0.1:8080/ws
+      REACT_APP_DADATA_TOKEN: 
+  redis:
+    image: "redis"
+  worker:
+    build: ./PaltaTest
+    command: ['celery', '-A', 'PaltaTest', 'worker', '-l', 'info']
+    volumes:
+      - ./PaltaTest:/app/backend
+    depends_on:
+      - redis
+    environment:
+        CELERY_BROKER_URL: 'redis://redis:6379/0'
+        CELERY_RESULT_BACKEND: redis://redis:6379/0
+        CELERY_WORKER_TIMEOUT: 300.0
+        DADATA_SECRET: 
+        DADATA_TOKEN: 
+        YANDEX_API_TOKEN: 
+  celery-beat:
+    build: ./PaltaTest
+    depends_on:
+      - postgres
+      - backend
+    environment:
+        CELERY_BROKER_URL: 'redis://redis:6379/0'
+        SECRET_KEY: django-insecure-zwuc6tujuxl0+1!0q+\=tq*&ct&^asywql3)^u\=l^qkiuy3x*%*;
+        DB_NAME: PaltaTest
+        DB_USER: postgres
+        DB_PASSWORD: dockerpalta-app
+        DB_HOST: postgres
+        DB_PORT: 5432
+        CELERY_RESULT_BACKEND: redis://redis:6379/0
+        CELERY_WORKER_TIMEOUT: 300.0
+        DADATA_SECRET: 
+        DADATA_TOKEN: 
+        YANDEX_API_TOKEN: 
+    command: ["python", '-m', "celery", "-A", "PaltaTest", "beat", "-l", "info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
+    tty: true
+    volumes:
+      - './django_celery_beat/:/app/django_celery_beat/'
+
